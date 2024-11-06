@@ -14,6 +14,16 @@ where
         }
     }
 
+    pub fn len(&self) -> usize {
+        self.storages
+            .iter()
+            .fold(0, |accum, storage| accum + storage.len())
+    }
+
+    pub fn iter(&'a self) -> impl Iterator<Item = &'a [T]> {
+        self.storages.iter().map(|storage| storage.as_slice())
+    }
+
     pub fn offset(&self, values: &[T]) -> Option<usize> {
         let mut global_index = 0;
         for storage in self.storages.iter() {
@@ -73,6 +83,16 @@ impl<'a> StrInt {
         Self(SliceInt::new())
     }
 
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn iter(&'a self) -> impl Iterator<Item = &'a str> {
+        self.0
+            .iter()
+            .map(|bytes| unsafe { str::from_utf8_unchecked(bytes) })
+    }
+
     pub fn offset<S: AsRef<str>>(&self, string: S) -> Option<usize> {
         self.0.offset(string.as_ref().as_bytes())
     }
@@ -95,6 +115,16 @@ pub struct PathInt(SliceInt<u8>);
 impl<'a> PathInt {
     pub fn new() -> Self {
         Self(SliceInt::new())
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn iter(&'a self) -> impl Iterator<Item = &'a OsStr> {
+        self.0
+            .iter()
+            .map(|bytes| unsafe { OsStr::from_encoded_bytes_unchecked(bytes) })
     }
 
     pub fn offset<P: AsRef<Path>>(&self, path: P) -> Option<usize> {

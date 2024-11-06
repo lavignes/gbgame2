@@ -1,9 +1,9 @@
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     error::Error,
-    fmt::Write,
+    fmt::Write as FmtWrite,
     fs::{self, File},
-    io::{self, ErrorKind, Read, Seek},
+    io::{self, ErrorKind, Read, Seek, Write},
     path::{Path, PathBuf},
     process::ExitCode,
     str,
@@ -92,6 +92,173 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
     tracing::trace!("starting pass 2");
     asm.rewind()?;
     asm.pass()?;
+
+    let mut output: Box<dyn Write> = match args.output.clone() {
+        Some(path) => Box::new(
+            File::options()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .open(path)
+                .map_err(|e| format!("cant open file: {e}"))?,
+        ),
+        None => Box::new(io::stdout()),
+    };
+
+    tracing::trace!("writing");
+
+    if args.make_depend {
+        let mut obj = args.source.clone();
+        obj.set_extension("o");
+        for include in asm.included {
+            writeln!(output, "{}: {}", obj.display(), include.display())?;
+        }
+    } else {
+        output.write_all("gbasm01".as_bytes())?;
+        output.write_all(&(asm.str_int.len() as u32).to_le_bytes())?;
+        for s in asm.str_int.iter() {
+            output.write_all(s.as_bytes())?;
+        }
+        output.write_all(&(asm.path_int.len() as u32).to_le_bytes())?;
+        for p in asm.path_int.iter() {
+            output.write_all(p.as_encoded_bytes())?;
+        }
+        output.write_all(&(asm.expr_int.len() as u32).to_le_bytes())?;
+        for expr in asm.expr_int.iter().flatten() {
+            match expr {
+                ExprNode::Const(val) => {
+                    output.write_all(&[0])?;
+                    output.write_all(&val.to_le_bytes())?;
+                }
+                ExprNode::Op(op) => {
+                    output.write_all(&[1])?;
+                    match op {
+                        Op::Binary(tok) => {
+                            output.write_all(&[0])?;
+                            output.write_all(&(tok.0 as u32).to_le_bytes())?;
+                        }
+                        Op::Unary(tok) => {
+                            output.write_all(&[1])?;
+                            output.write_all(&(tok.0 as u32).to_le_bytes())?;
+                        }
+                    }
+                }
+                ExprNode::Label(label) => {
+                    output.write_all(&[2])?;
+                    if let Some(scope) = label.scope {
+                        output.write_all(&[0])?;
+                        let index = asm.str_int.offset(scope).unwrap();
+                        output.write_all(&(index as u32).to_le_bytes())?;
+                        output.write_all(&(scope.len() as u32).to_le_bytes())?;
+                    } else {
+                        output.write_all(&[1])?;
+                    }
+                    let index = asm.str_int.offset(label.string).unwrap();
+                    output.write_all(&(index as u32).to_le_bytes())?;
+                    output.write_all(&(label.string.len() as u32).to_le_bytes())?;
+                }
+                ExprNode::Tag(label, tag) => {
+                    output.write_all(&[3])?;
+                    if let Some(scope) = label.scope {
+                        output.write_all(&[0])?;
+                        let index = asm.str_int.offset(scope).unwrap();
+                        output.write_all(&(index as u32).to_le_bytes())?;
+                        output.write_all(&(scope.len() as u32).to_le_bytes())?;
+                    } else {
+                        output.write_all(&[1])?;
+                    }
+                    let index = asm.str_int.offset(label.string).unwrap();
+                    output.write_all(&(index as u32).to_le_bytes())?;
+                    output.write_all(&(label.string.len() as u32).to_le_bytes())?;
+                    let index = asm.str_int.offset(tag).unwrap();
+                    output.write_all(&(index as u32).to_le_bytes())?;
+                    output.write_all(&(tag.len() as u32).to_le_bytes())?;
+                }
+                ExprNode::Addr(section, pc) => {
+                    output.write_all(&[4])?;
+                    let index = asm.str_int.offset(section).unwrap();
+                    output.write_all(&(index as u32).to_le_bytes())?;
+                    output.write_all(&(section.len() as u32).to_le_bytes())?;
+                    output.write_all(&pc.to_le_bytes())?;
+                }
+            }
+        }
+        output.write_all(&(asm.syms.len() as u32).to_le_bytes())?;
+        for (label, sym) in asm.syms {
+            if let Some(scope) = label.scope {
+                output.write_all(&[0])?;
+                let index = asm.str_int.offset(scope).unwrap();
+                output.write_all(&(index as u32).to_le_bytes())?;
+                output.write_all(&(scope.len() as u32).to_le_bytes())?;
+            } else {
+                output.write_all(&[1])?;
+            }
+            let index = asm.str_int.offset(label.string).unwrap();
+            output.write_all(&(index as u32).to_le_bytes())?;
+            output.write_all(&(label.string.len() as u32).to_le_bytes())?;
+            match sym.value {
+                Expr::Const(value) => {
+                    output.write_all(&[0])?;
+                    output.write_all(&value.to_le_bytes())?;
+                }
+                Expr::List(expr) => {
+                    output.write_all(&[1])?;
+                    let index = asm.expr_int.offset(expr).unwrap();
+                    output.write_all(&(index as u32).to_le_bytes())?;
+                    output.write_all(&(expr.len() as u32).to_le_bytes())?;
+                }
+            }
+            let index = asm.str_int.offset(sym.unit).unwrap();
+            output.write_all(&(index as u32).to_le_bytes())?;
+            output.write_all(&(sym.unit.len() as u32).to_le_bytes())?;
+            let index = asm.str_int.offset(sym.section).unwrap();
+            output.write_all(&(index as u32).to_le_bytes())?;
+            output.write_all(&(sym.section.len() as u32).to_le_bytes())?;
+            let index = asm.path_int.offset(sym.pos.file).unwrap();
+            output.write_all(&(index as u32).to_le_bytes())?;
+            output.write_all(
+                &(sym.pos.file.as_os_str().as_encoded_bytes().len() as u32).to_le_bytes(),
+            )?;
+            output.write_all(&(sym.pos.line as u32).to_le_bytes())?;
+            output.write_all(&(sym.pos.col as u32).to_le_bytes())?;
+            output.write_all(&[sym.flags])?;
+        }
+        let count = asm
+            .sections
+            .iter()
+            .filter(|section| !section.data.is_empty())
+            .count();
+        output.write_all(&(count as u32).to_le_bytes())?;
+        for section in asm.sections {
+            if section.data.is_empty() {
+                continue;
+            }
+            let index = asm.str_int.offset(section.name).unwrap();
+            output.write_all(&(index as u32).to_le_bytes())?;
+            output.write_all(&(section.name.len() as u32).to_le_bytes())?;
+            output.write_all(&(section.data.len() as u32).to_le_bytes())?;
+            output.write_all(&section.data)?;
+            output.write_all(&(section.relocs.len() as u32).to_le_bytes())?;
+            for reloc in section.relocs {
+                output.write_all(&(reloc.offset as u32).to_le_bytes())?;
+                output.write_all(&reloc.width.to_le_bytes())?;
+                let index = asm.expr_int.offset(reloc.value).unwrap();
+                output.write_all(&(index as u32).to_le_bytes())?;
+                output.write_all(&(reloc.value.len() as u32).to_le_bytes())?;
+                let index = asm.str_int.offset(reloc.unit).unwrap();
+                output.write_all(&(index as u32).to_le_bytes())?;
+                output.write_all(&(reloc.unit.len() as u32).to_le_bytes())?;
+                let index = asm.path_int.offset(reloc.pos.file).unwrap();
+                output.write_all(&(index as u32).to_le_bytes())?;
+                output.write_all(
+                    &(reloc.pos.file.as_os_str().as_encoded_bytes().len() as u32).to_le_bytes(),
+                )?;
+                output.write_all(&(reloc.pos.line as u32).to_le_bytes())?;
+                output.write_all(&(reloc.pos.col as u32).to_le_bytes())?;
+                output.write_all(&[reloc.flags])?;
+            }
+        }
+    }
 
     Ok(())
 }
