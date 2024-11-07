@@ -1,10 +1,15 @@
+#![allow(incomplete_features)]
+#![feature(generic_const_exprs)]
+
+use core::str;
 use std::{
     collections::HashMap,
     error::Error,
+    ffi::OsStr,
     fs::{self, File},
     io::{self, BufWriter, ErrorKind, Read, Write},
     mem,
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::ExitCode,
 };
 
@@ -65,7 +70,8 @@ fn main() -> ExitCode {
 }
 
 fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
-    let mut config = File::open(args.config).map_err(|e| format!("cant open file: {e}"))?;
+    let mut config = File::open(&args.config)
+        .map_err(|e| format!("cant open file: {}: {e}", args.config.display()))?;
     let mut config_text = String::new();
     config.read_to_string(&mut config_text)?;
     let config: Script = toml::from_str(&config_text)?;
@@ -116,7 +122,7 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
                     }
                 },
                 MemoryType::RW => match &section.ty {
-                    SectionType::RW | SectionType::BSS | SectionType::DP => {}
+                    SectionType::RW | SectionType::BSS | SectionType::HI => {}
                     _ => {
                         Err(ld.err(&format!(
                             "memory \"{}\" is not type-compatible with section \"{name}\"",
@@ -243,7 +249,10 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
 
     for pass in 1..=2 {
         tracing::trace!("symbol table pass {pass}");
-        for (label, sym) in ld.syms {
+        // TODO: perf
+        let labels: Vec<Label> = ld.syms.keys().cloned().collect();
+        for label in labels {
+            let sym = ld.syms.get(&label).unwrap();
             let value = match sym.value {
                 Expr::Const(value) => Expr::Const(value),
                 Expr::List(expr) => {
@@ -254,12 +263,12 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
                     }
                 }
             };
-            sym.value = value;
+            ld.syms.get_mut(&label).unwrap().value = value;
         }
     }
 
     tracing::trace!("symbol table validation");
-    for (label, sym) in ld.syms {
+    for (label, sym) in &ld.syms {
         if let Expr::Const(_) = sym.value {
             continue;
         }
@@ -287,25 +296,27 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
                     reloc.unit,
                     &format!(
                         "expression cannot be solved\n\tdefined at {}:{}:{}",
-                        reloc.pos.file, reloc.pos.line, reloc.pos.column
+                        reloc.pos.file.display(),
+                        reloc.pos.line,
+                        reloc.pos.col
                     ),
                 ))?
             };
             match reloc.width {
                 1 => {
                     if (value as u32) > (u8::MAX as u32) {
-                        // DP relocations are OK if they reloc inside of a DP section
-                        if (reloc.flags & RelocFlags::DP) != 0 {
+                        // HI relocations are OK if they reloc inside of a HI section
+                        if (reloc.flags & RelocFlags::HI) != 0 {
                             if ld
                                 .sections
                                 .iter()
                                 .find(|sec| {
-                                    // find DP section that holds this address
+                                    // find HI section that holds this address
                                     config
                                         .sections
                                         .iter()
                                         .find(|(name, section)| {
-                                            matches!(section.ty, SectionType::DP)
+                                            matches!(section.ty, SectionType::HI)
                                                 && (sec.name == *name)
                                         })
                                         .is_some()
@@ -318,7 +329,9 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
                                     reloc.unit,
                                     &format!(
                                         "expression >1 byte\n\tdefined at {}:{}:{}",
-                                        reloc.pos.file, reloc.pos.line, reloc.pos.column
+                                        reloc.pos.file.display(),
+                                        reloc.pos.line,
+                                        reloc.pos.col
                                     ),
                                 ))?;
                             }
@@ -327,7 +340,9 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
                                 reloc.unit,
                                 &format!(
                                     "expression >1 byte\n\tdefined at {}:{}:{}",
-                                    reloc.pos.file, reloc.pos.line, reloc.pos.column
+                                    reloc.pos.file.display(),
+                                    reloc.pos.line,
+                                    reloc.pos.col
                                 ),
                             ))?;
                         }
@@ -335,16 +350,19 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
                     ld.sections[i].data[reloc.offset] = value as u8;
                 }
                 2 => {
+                    // TODO rewrite. need to handle banking
                     if (value as u32) > (u16::MAX as u32) {
-                        // ABS JMP-type relocations are OK if they are the same bank
-                        if (reloc.flags & RelocFlags::ABS_JMP) != 0 {
+                        // JP-type relocations are OK if they are the same bank
+                        if (reloc.flags & RelocFlags::JP) != 0 {
                             let bank = ld.sections[i].pc >> 16;
                             if ((value as u32) >> 16) != bank {
                                 Err(ld.err_in(
                                     reloc.unit,
                                     &format!(
                                         "expression >2 bytes\n\tdefined at {}:{}:{}",
-                                        reloc.pos.file, reloc.pos.line, reloc.pos.column
+                                        reloc.pos.file.display(),
+                                        reloc.pos.line,
+                                        reloc.pos.col
                                     ),
                                 ))?;
                             }
@@ -353,38 +371,15 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
                                 reloc.unit,
                                 &format!(
                                     "expression >2 bytes\n\tdefined at {}:{}:{}",
-                                    reloc.pos.file, reloc.pos.line, reloc.pos.column
+                                    reloc.pos.file.display(),
+                                    reloc.pos.line,
+                                    reloc.pos.col
                                 ),
                             ))?;
                         }
                     }
                     ld.sections[i].data[reloc.offset] = ((value as u32) >> 0) as u8;
                     ld.sections[i].data[reloc.offset + 1] = ((value as u32) >> 8) as u8;
-                }
-                3 => {
-                    if (value as u32) > 0x00FFFFFFu32 {
-                        Err(ld.err_in(
-                            reloc.unit,
-                            &format!(
-                                "expression >3 bytes\n\tdefined at {}:{}:{}",
-                                reloc.pos.file, reloc.pos.line, reloc.pos.column
-                            ),
-                        ))?;
-                    }
-                    if (reloc.flags & RelocFlags::L_JMP) != 0 {
-                        let bank = ld.sections[i].pc >> 16;
-                        if ((value as u32) >> 16) == bank {
-                            tracing::warn!(
-                                "long jump within same bank\n\tdefined at {}:{}:{}",
-                                reloc.pos.file,
-                                reloc.pos.line,
-                                reloc.pos.column
-                            );
-                        }
-                    }
-                    ld.sections[i].data[reloc.offset] = ((value as u32) >> 0) as u8;
-                    ld.sections[i].data[reloc.offset + 1] = ((value as u32) >> 8) as u8;
-                    ld.sections[i].data[reloc.offset + 2] = ((value as u32) >> 16) as u8;
                 }
                 _ => unreachable!(),
             }
@@ -397,8 +392,8 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
                 .write(true)
                 .create(true)
                 .truncate(true)
-                .open(path)
-                .map_err(|e| format!("cant open file: {e}"))?,
+                .open(&path)
+                .map_err(|e| format!("cant open file: {}: {e}", path.display()))?,
         )),
         None => Box::new(io::stdout()),
     };
@@ -409,7 +404,7 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
             if &section.load != mem_name {
                 continue;
             }
-            if matches!(section.ty, SectionType::BSS | SectionType::DP) {
+            if matches!(section.ty, SectionType::BSS | SectionType::HI) {
                 continue;
             }
             let section = &ld.sections.iter().find(|sec| sec.name == sec_name).unwrap();
@@ -437,14 +432,14 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
             .write(true)
             .create(true)
             .truncate(true)
-            .open(path)
-            .map_err(|e| format!("cant open file: {e}"))?;
-        for sym in &ld.syms {
+            .open(&path)
+            .map_err(|e| format!("cant open file: {}: {e}", path.display()))?;
+        for (label, sym) in &ld.syms {
             if (sym.flags & SymFlags::EQU) != 0 {
                 continue;
             }
             if let Expr::Const(value) = sym.value {
-                writeln!(file, "{value:06X} {}", sym.label.to_string())?;
+                writeln!(file, "{value:06X} {}", label.to_string())?;
             }
         }
     }
@@ -455,15 +450,19 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
             .write(true)
             .create(true)
             .truncate(true)
-            .open(path)
-            .map_err(|e| format!("cant open file: {e}"))?;
-        ld.syms.sort_by_key(|sym| sym.label.to_string());
-        ld.syms.dedup_by_key(|sym| sym.label.to_string());
-        for sym in &ld.syms {
-            if sym.pos.file == "__DEFINES__" {
+            .open(&path)
+            .map_err(|e| format!("cant open file: {}: {e}", path.display()))?;
+        for (label, sym) in &ld.syms {
+            if sym.pos.file == Path::new("__DEFINES__") {
                 continue;
             }
-            writeln!(file, "{}\t{}\t{}", sym.label, sym.pos.file, sym.pos.line)?;
+            writeln!(
+                file,
+                "{}\t{}\t{}",
+                label,
+                sym.pos.file.display(),
+                sym.pos.line
+            )?;
         }
     }
 
@@ -521,36 +520,47 @@ impl<'a> Ld<'a> {
             return Err(self.err_in(file, "bad magic"));
         }
         // fill up a temporary string table
-        let mut str_int: StrInterner<'_> = StrInterner::new();
+        let mut str_int: StrInt = StrInt::new();
         {
             let str_len: u32 = self.read_int(&mut reader)?;
-            let mut storage = String::new();
-            storage.extend((0..str_len).map(|_| ' '));
-            reader.read_exact(unsafe { storage.as_bytes_mut() })?;
-            str_int.storages.push(storage);
+            let mut bytes = Vec::new();
+            bytes.extend((0..str_len).map(|_| 0));
+            reader.read_exact(&mut bytes)?;
+            str_int.intern(unsafe { str::from_utf8_unchecked(&bytes) });
+        }
+        // fill up a temporary path table
+        let mut path_int: PathInt = PathInt::new();
+        {
+            let str_len: u32 = self.read_int(&mut reader)?;
+            let mut bytes = Vec::new();
+            bytes.extend((0..str_len).map(|_| 0));
+            reader.read_exact(&mut bytes)?;
+            path_int.intern(unsafe { OsStr::from_encoded_bytes_unchecked(&bytes) });
         }
         // and a temporary expression table
-        let mut expr_int: SliceInterner<ExprNode<'_>> = SliceInterner::new();
+        let mut expr_int: SliceInt<ExprNode<'_>> = SliceInt::new();
         {
             let expr_len: u32 = self.read_int(&mut reader)?;
-            let mut storage = Vec::new();
+            let mut exprs = Vec::new();
             for _ in 0..expr_len {
                 let ty: u8 = self.read_int(&mut reader)?;
                 match ty {
                     0 => {
                         let value: i32 = self.read_int(&mut reader)?;
-                        storage.push(ExprNode::Const(value));
+                        exprs.push(ExprNode::Const(value));
                     }
                     1 => {
                         let ty: u8 = self.read_int(&mut reader)?;
                         match ty {
                             0 => {
-                                let value: u8 = self.read_int(&mut reader)?;
-                                storage.push(ExprNode::Op(Op::Binary(Tok(value))));
+                                let value: u32 = self.read_int(&mut reader)?;
+                                let value = char::from_u32(value).unwrap();
+                                exprs.push(ExprNode::Op(Op::Binary(Tok(value))));
                             }
                             1 => {
-                                let value: u8 = self.read_int(&mut reader)?;
-                                storage.push(ExprNode::Op(Op::Unary(Tok(value))));
+                                let value: u32 = self.read_int(&mut reader)?;
+                                let value = char::from_u32(value).unwrap();
+                                exprs.push(ExprNode::Op(Op::Unary(Tok(value))));
                             }
                             _ => return Err(self.err_in(file, "malformed expression table")),
                         }
@@ -571,7 +581,7 @@ impl<'a> Ld<'a> {
                                     .unwrap();
                                 let scope = self.str_int.intern(scope);
                                 let string = self.str_int.intern(string);
-                                storage.push(ExprNode::Label(Label::new(Some(scope), string)));
+                                exprs.push(ExprNode::Label(Label::new(Some(scope), string)));
                             }
                             1 => {
                                 let index: u32 = self.read_int(&mut reader)?;
@@ -580,7 +590,7 @@ impl<'a> Ld<'a> {
                                     .slice((index as usize)..((index as usize) + (len as usize)))
                                     .unwrap();
                                 let string = self.str_int.intern(string);
-                                storage.push(ExprNode::Label(Label::new(None, string)));
+                                exprs.push(ExprNode::Label(Label::new(None, string)));
                             }
                             _ => return Err(self.err_in(file, "malformed expression table")),
                         }
@@ -607,7 +617,7 @@ impl<'a> Ld<'a> {
                                 let scope = self.str_int.intern(scope);
                                 let string = self.str_int.intern(string);
                                 let tag = self.str_int.intern(tag);
-                                storage.push(ExprNode::Tag(Label::new(Some(scope), string), tag));
+                                exprs.push(ExprNode::Tag(Label::new(Some(scope), string), tag));
                             }
                             1 => {
                                 let index: u32 = self.read_int(&mut reader)?;
@@ -622,7 +632,7 @@ impl<'a> Ld<'a> {
                                     .unwrap();
                                 let string = self.str_int.intern(string);
                                 let tag = self.str_int.intern(tag);
-                                storage.push(ExprNode::Tag(Label::new(None, string), tag));
+                                exprs.push(ExprNode::Tag(Label::new(None, string), tag));
                             }
                             _ => return Err(self.err_in(file, "malformed expression table")),
                         }
@@ -645,12 +655,12 @@ impl<'a> Ld<'a> {
                                 &format!("section \"{expr_section}\" is not defined in config"),
                             ));
                         };
-                        storage.push(ExprNode::Addr(expr_section, pc));
+                        exprs.push(ExprNode::Addr(expr_section, pc));
                     }
                     _ => return Err(self.err_in(file, "malformed expression table")),
                 }
             }
-            expr_int.storages.push(storage);
+            expr_int.storages.push(exprs);
         }
         // time to start filling the global symbol table
         let syms_len: u32 = self.read_int(&mut reader)?;
@@ -719,34 +729,34 @@ impl<'a> Ld<'a> {
             let sym_section = self.str_int.intern(sym_section);
             let index: u32 = self.read_int(&mut reader)?;
             let len: u32 = self.read_int(&mut reader)?;
-            let sym_file = str_int
+            let sym_file = path_int
                 .slice((index as usize)..((index as usize) + (len as usize)))
                 .unwrap();
-            let sym_file = self.str_int.intern(sym_file);
+            let sym_file = self.path_int.intern(sym_file);
             let line: u32 = self.read_int(&mut reader)?;
-            let column: u32 = self.read_int(&mut reader)?;
+            let col: u32 = self.read_int(&mut reader)?;
             let pos = Pos {
                 file: sym_file,
-                line: line as usize,
-                column: column as usize,
+                line,
+                col,
             };
             let flags: u8 = self.read_int(&mut reader)?;
             // duplicate exported symbol?
-            if let Some(other) = self
-                .syms
-                .iter()
-                .find(|sym| (sym.label == label) && (sym.unit == unit))
-            {
-                return Err(self.err_in(file, &format!("duplicate exported symbol \"{label}\" found\n\tdefined at {}:{}:{}\n\tagain at {sym_file}:{line}:{column}", other.pos.file, other.pos.line, other.pos.column)));
+            if let Some(sym) = self.syms.get(&label) {
+                if sym.unit == unit {
+                    return Err(self.err_in(file, &format!("duplicate exported symbol \"{label}\" found\n\tdefined at {}:{}:{}\n\tagain at {}:{line}:{col}",sym_file.display(),  sym.pos.file.display(), sym.pos.line, sym.pos.col)));
+                }
             }
-            self.syms.push(Sym {
+            self.syms.insert(
                 label,
-                value,
-                unit,
-                section: sym_section,
-                pos,
-                flags,
-            });
+                Sym {
+                    value,
+                    unit,
+                    section: sym_section,
+                    pos,
+                    flags,
+                },
+            );
         }
         // add to sections
         let sections_len: u32 = self.read_int(&mut reader)?;
@@ -791,7 +801,7 @@ impl<'a> Ld<'a> {
                     .unwrap();
                 let index: u32 = self.read_int(&mut reader)?;
                 let len: u32 = self.read_int(&mut reader)?;
-                let reloc_file = str_int
+                let reloc_file = path_int
                     .slice((index as usize)..((index as usize) + (len as usize)))
                     .unwrap();
                 let unit = if unit == "__STATIC__" {
@@ -799,13 +809,13 @@ impl<'a> Ld<'a> {
                 } else {
                     self.str_int.intern("__EXPORT__")
                 };
-                let reloc_file = self.str_int.intern(reloc_file);
+                let reloc_file = self.path_int.intern(reloc_file);
                 let line: u32 = self.read_int(&mut reader)?;
-                let column: u32 = self.read_int(&mut reader)?;
+                let col: u32 = self.read_int(&mut reader)?;
                 let pos = Pos {
                     file: reloc_file,
-                    line: line as usize,
-                    column: column as usize,
+                    line,
+                    col,
                 };
                 let flags: u8 = self.read_int(&mut reader)?;
                 relocs.push(Reloc {
@@ -845,9 +855,10 @@ impl<'a> Ld<'a> {
             match *node {
                 ExprNode::Const(value) => scratch.push(value),
                 ExprNode::Label(label) => {
-                    let sym = self.syms.iter().find(|sym| {
-                        (sym.label == label) && ((sym.unit == unit) || (sym.unit == "__EXPORT__"))
-                    })?;
+                    let sym = self.syms.get(&label)?;
+                    if (sym.unit != unit) && (sym.unit != "__EXPORT__") {
+                        return None;
+                    }
                     match sym.value {
                         Expr::Const(value) => scratch.push(value),
                         Expr::List(expr) => {
@@ -857,9 +868,10 @@ impl<'a> Ld<'a> {
                     }
                 }
                 ExprNode::Tag(label, tag) => {
-                    let sym = self.syms.iter().find(|sym| {
-                        (sym.label == label) && ((sym.unit == unit) || (sym.unit == "__EXPORT__"))
-                    })?;
+                    let sym = self.syms.get(&label)?;
+                    if (sym.unit != unit) && (sym.unit != "__EXPORT__") {
+                        return None;
+                    }
                     let tags = sections[sym.section].tags.as_ref();
                     let value = tags?.get(tag)?;
                     scratch.push(*value);
@@ -872,7 +884,6 @@ impl<'a> Ld<'a> {
                         Op::Unary(Tok::TILDE) => scratch.push(!rhs),
                         Op::Unary(Tok::BANG) => scratch.push((rhs == 0) as i32),
                         Op::Unary(Tok::LT) => scratch.push(((rhs as u32) & 0xFF) as i32),
-                        Op::Unary(Tok::TICK) => scratch.push(((rhs as u32) & 0xFFFF) as i32),
                         Op::Unary(Tok::GT) => scratch.push((((rhs as u32) & 0xFF00) >> 8) as i32),
                         Op::Unary(Tok::CARET) => {
                             scratch.push((((rhs as u32) & 0xFF0000) >> 16) as i32)
@@ -894,13 +905,13 @@ impl<'a> Ld<'a> {
                                 Tok::LTE => scratch.push((lhs <= rhs) as i32),
                                 Tok::GT => scratch.push((lhs > rhs) as i32),
                                 Tok::GTE => scratch.push((lhs >= rhs) as i32),
-                                Tok::LEQ => scratch.push((lhs == rhs) as i32),
-                                Tok::NEQ => scratch.push((lhs != rhs) as i32),
+                                Tok::DEQU => scratch.push((lhs == rhs) as i32),
+                                Tok::NEQU => scratch.push((lhs != rhs) as i32),
                                 Tok::AMP => scratch.push(lhs & rhs),
                                 Tok::PIPE => scratch.push(lhs | rhs),
                                 Tok::CARET => scratch.push(lhs ^ rhs),
                                 Tok::AND => scratch.push(((lhs != 0) && (rhs != 0)) as i32),
-                                Tok::LOR => scratch.push(((lhs != 0) || (rhs != 0)) as i32),
+                                Tok::OR => scratch.push(((lhs != 0) || (rhs != 0)) as i32),
                                 _ => unreachable!(),
                             }
                         }
@@ -965,7 +976,7 @@ enum SectionType {
     RO,
     RW,
     BSS,
-    DP,
+    HI,
 }
 
 fn one() -> u32 {

@@ -59,8 +59,9 @@ fn main() -> ExitCode {
 }
 
 fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
-    let input = fs::canonicalize(args.source.clone())?;
-    let file = File::open(&input).map_err(|e| format!("cant open file: {e}"))?;
+    let input = fs::canonicalize(&args.source)?;
+    let file = File::open(&input)
+        .map_err(|e| format!("cant open file: {}: {e}", args.source.display()))?;
     let lexer = Lexer::new(file, &input);
     let mut asm = Asm::new(lexer, &args.include);
 
@@ -93,14 +94,14 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
     asm.rewind()?;
     asm.pass()?;
 
-    let mut output: Box<dyn Write> = match args.output.clone() {
+    let mut output: Box<dyn Write> = match args.output {
         Some(path) => Box::new(
             File::options()
                 .write(true)
                 .create(true)
                 .truncate(true)
-                .open(path)
-                .map_err(|e| format!("cant open file: {e}"))?,
+                .open(&path)
+                .map_err(|e| format!("cant open file: {}: {e}", path.display()))?,
         ),
         None => Box::new(io::stdout()),
     };
@@ -108,7 +109,7 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
     tracing::trace!("writing");
 
     if args.make_depend {
-        let mut obj = args.source.clone();
+        let mut obj = args.source;
         obj.set_extension("o");
         for include in asm.included {
             writeln!(output, "{}: {}", obj.display(), include.display())?;
@@ -2735,20 +2736,6 @@ impl<'a> Asm<'a> {
 
     fn range_u8(&self, value: i32) -> io::Result<u8> {
         if (value as u32) > (u8::MAX as u32) {
-            return Err(self.err("expression >1 byte"));
-        }
-        Ok(value as u8)
-    }
-
-    fn range_i16(&self, value: i32) -> io::Result<u16> {
-        if value > (i16::MAX as i32) {
-            return Err(self.err("expression >2 bytes"));
-        }
-        Ok(value as u16)
-    }
-
-    fn range_i8(&self, value: i32) -> io::Result<u8> {
-        if value > (i8::MAX as i32) {
             return Err(self.err("expression >1 byte"));
         }
         Ok(value as u8)
