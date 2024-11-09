@@ -37,7 +37,7 @@ struct Args {
     #[arg(short, long)]
     output: Option<PathBuf>,
 
-    /// Output file for `MSL` debug symbol file
+    /// Output file for `SYM` debug symbol file
     #[arg(short = 'g', long)]
     debug: Option<PathBuf>,
 
@@ -410,7 +410,14 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
                 continue;
             }
             if let Expr::Const(value) = sym.value {
-                writeln!(file, "{value:06X} {}", label.to_string())?;
+                let tags = &config.sections[sym.section].tags.as_ref();
+                if let Some(tags) = tags {
+                    if let Some(bank) = tags.get("bank") {
+                        writeln!(file, "{bank:02X}:{value:04X} {}", label)?;
+                        continue;
+                    }
+                }
+                writeln!(file, "{value:04X} {}", label)?;
             }
         }
     }
@@ -487,7 +494,7 @@ impl<'a> Ld<'a> {
     fn load<R: Read>(&mut self, file: &str, mut reader: R) -> io::Result<()> {
         let mut magic = [0u8; 7];
         reader.read_exact(&mut magic)?;
-        if &magic != b"nyasm01" {
+        if &magic != b"gbasm01" {
             return Err(self.err_in(file, "bad magic"));
         }
         // fill up a temporary string table

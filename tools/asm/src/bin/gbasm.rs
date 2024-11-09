@@ -299,7 +299,7 @@ impl<'a> Asm<'a> {
             toks: vec![Box::new(lexer)],
             str_int,
             tok_int: SliceInt::new(),
-            path_int: PathInt::new(),
+            path_int,
             loop_int: SliceInt::new(),
             expr_int: SliceInt::new(),
             section: 0,
@@ -2224,7 +2224,7 @@ impl<'a> Asm<'a> {
                     base.pop();
                     base.push(name);
                     // try current directory
-                    if let Ok(name) = fs::canonicalize(name) {
+                    if let Ok(name) = fs::canonicalize(base) {
                         name
                     } else if let Some(name) = self.includes.iter().find_map(|path| {
                         // try every include directory
