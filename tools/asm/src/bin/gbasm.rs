@@ -3816,7 +3816,9 @@ impl<R: Read + Seek> CharReader<R> {
                             return Ok(self.stash);
                         }
                         match str::from_utf8(&buf[..i + 1]) {
-                            Err(err) => return Err(io::Error::new(ErrorKind::InvalidData, err)),
+                            Err(err) => {
+                                return Err(io::Error::new(ErrorKind::InvalidData, err));
+                            }
                             Ok(s) => {
                                 self.stash = Some(s.chars().next().expect("must be valid"));
                                 return Ok(self.stash);
@@ -3825,7 +3827,8 @@ impl<R: Read + Seek> CharReader<R> {
                     }
                     Err(err) => return Err(err),
                     Ok(()) => match str::from_utf8(&buf[..i + 1]) {
-                        Err(err) => return Err(io::Error::new(ErrorKind::InvalidData, err)),
+                        // might need to read more chars
+                        Err(_) => continue,
                         Ok(s) => {
                             self.stash = Some(s.chars().next().expect("must be valid"));
                             return Ok(self.stash);
