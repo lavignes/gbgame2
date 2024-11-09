@@ -1,0 +1,74 @@
+[MEMORY]
+#########################################
+## ROM
+#########################################
+VECTORS = { start = "$0000", size = "$100", type = "ro", fill = "$00" }
+ROM_HEADER = { start = "$0100", size = "$50", type = "ro", fill = "$00" }
+ROM00 = { start = "$0150", size = "$3EB0", type = "ro", fill = "$00" }
+ROM01 = { start = "$4000", size = "$4000", type = "ro", fill = "$00" }
+ROM02 = { start = "$4000", size = "$4000", type = "ro", fill = "$00" }
+ROM03 = { start = "$4000", size = "$4000", type = "ro", fill = "$00" }
+ROM04 = { start = "$4000", size = "$4000", type = "ro", fill = "$00" }
+ROM05 = { start = "$4000", size = "$4000", type = "ro", fill = "$00" }
+ROM06 = { start = "$4000", size = "$4000", type = "ro", fill = "$00" }
+ROM07 = { start = "$4000", size = "$4000", type = "ro", fill = "$00" }
+
+#########################################
+## VRAM
+#########################################
+VRAM0 = { start = "$8000", size = "$2000", type = "rw" }
+VRAM1 = { start = "$8000", size = "$2000", type = "rw" }
+
+#########################################
+## SRAM
+#########################################
+SRAM0 = { start = "$A000", size = "$2000", type = "rw" }
+SRAM1 = { start = "$A000", size = "$2000", type = "rw" }
+
+#########################################
+## WRAM
+#########################################
+WRAM0 = { start = "$C000", size = "$1000", type = "rw" }
+WRAM1 = { start = "$D000", size = "$1000", type = "rw" }
+WRAM2 = { start = "$D000", size = "$1000", type = "rw" }
+WRAM3 = { start = "$D000", size = "$1000", type = "rw" }
+WRAM4 = { start = "$D000", size = "$1000", type = "rw" }
+WRAM5 = { start = "$D000", size = "$1000", type = "rw" }
+WRAM6 = { start = "$D000", size = "$1000", type = "rw" }
+WRAM7 = { start = "$D000", size = "$1000", type = "rw" }
+HRAM = { start = "$FF80", size = "$7E", type = "rw" }
+
+[SECTIONS]
+#########################################
+## ROM
+#########################################
+VECTORS = { load = "VECTORS", type = "ro" }
+ROM_HEADER = { load = "ROM_HEADER", type = "ro" }
+HOME = { load = "ROM00", type = "ro", tags = { bank = "$0" } }
+
+#########################################
+## VRAM
+#########################################
+VRAM0 = { load = "VRAM0", type = "bss", define = true, tags = { bank = "$0" } }
+VRAM1 = { load = "VRAM1", type = "bss", define = true, tags = { bank = "$1" } }
+
+#########################################
+## SRAM
+#########################################
+SRAM0 = { load = "SRAM0", type = "bss", tags = { bank = "$0" } }
+SRAM1 = { load = "SRAM1", type = "bss", tags = { bank = "$1" } }
+
+#########################################
+## WRAM
+#########################################
+OAMBUF = { load = "WRAM0", type = "bss", align = "$100", tags = { bank = "$0" } }
+WRAM0 = { load = "WRAM0", type = "bss", tags = { bank = "$0" } }
+WRAM1 = { load = "WRAM1", type = "bss", tags = { bank = "$1" } }
+WRAM2 = { load = "WRAM2", type = "bss", tags = { bank = "$2" } }
+WRAM3 = { load = "WRAM3", type = "bss", tags = { bank = "$3" } }
+WRAM4 = { load = "WRAM4", type = "bss", tags = { bank = "$4" } }
+WRAM5 = { load = "WRAM5", type = "bss", tags = { bank = "$5" } }
+WRAM6 = { load = "WRAM6", type = "bss", tags = { bank = "$6" } }
+WRAM7 = { load = "WRAM7", type = "bss", tags = { bank = "$7" } }
+HRAM = { load = "HRAM", type = "hi" }
+

@@ -1,4 +1,4 @@
-isyn clear
+syn clear
 syn case ignore
 
 syn match gbasmIdentifier "[a-z_\.][a-z0-9_\.]*"

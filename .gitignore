@@ -1,0 +1,6 @@
+/game.gb
+/game.sym
+/game.tags
+
+*.d
+*.o
