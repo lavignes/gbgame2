@@ -337,6 +337,9 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
                     ld.sections[i].data[reloc.offset] = value as u8;
                 }
                 2 => {
+                    // TODO check if source and dest bank are different
+                    // JP within a bank or to bank0 is always fine
+
                     if (value as u32) > (u16::MAX as u32) {
                         // TODO handle JP reloc flag?
                         Err(ld.err_in(

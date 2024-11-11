@@ -6,7 +6,7 @@
     \if \len \1 > 11
         \fail "game title too long"
     \end
-    \loop N, 11 - \len \1
+    \loop I, 11 - \len \1
         \byte $00
     \end
 \end
@@ -23,7 +23,7 @@ Header:
     \byte $BB, $BB, $67, $63, $6E, $0E, $EC, $CC
     \byte $DD, $DC, $99, $9F, $BB, $B9, $33, $3E
 
-    TITLE "GAME2!sdkfl;aksdl;fkas;kfa;sdlf"
+    TITLE "GAME2!"
     \byte "!!!!"
     \byte $C0   ; GBC-only
     \word $0000 ; License code

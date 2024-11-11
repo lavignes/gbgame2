@@ -14,7 +14,7 @@ ASM_FLAGS := -DDEBUG=1 -l $(LOG_LEVEL) -I include
 LINK_FLAGS := -c link.toml -l $(LOG_LEVEL) -g game.sym --tags game.tags
 FIX_FLAGS := -l $(LOG_LEVEL)
 
-game.gb: link.toml $(DEPS) $(OBJS) $(LINK) $(FIX)
+game.gbc: link.toml $(DEPS) $(OBJS) $(LINK) $(FIX)
 	$(LINK) $(LINK_FLAGS) -o $@ $(OBJS)
 	$(FIX) $(FIX_FLAGS) -o $@ $@
 
@@ -41,7 +41,7 @@ deepclean: clean
 clean:
 	rm -f $(call rwildcard,src,*.o)
 	rm -f $(call rwildcard,src,*.d)
-	rm -f game.gb
+	rm -f game.gbc
 	rm -f game.sym
 	rm -f game.tags
 
