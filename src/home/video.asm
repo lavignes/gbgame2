@@ -8,18 +8,17 @@ oamBuf: \space GB_MMAP_OAM_SIZE
 
 \section "HRAM"
 
-;; Holds the DMA transfer routine
-dmaFunction: \space 10
+;; Holds the OAM DMA transfer routine
+oamDmaFunction: \space 10
 
-;; Whether vblank has occurred
-vBlanked:: \space 1
+vBlankWaiter:: \space 1
 
 \section "HOME"
 
 VideoInit::
-    ld hl, dmaFunction
-    ld de, DMAFunction
-    ld bc, DMAFunction.End - DMAFunction
+    ld hl, oamDmaFunction
+    ld de, OamDmaFunction
+    ld bc, OamDmaFunction.End - OamDmaFunction
     call MemCopy
     \loop BANK, 2
         ld a, BANK
@@ -56,6 +55,13 @@ VideoInit::
     ret
 
 VideoBlank::
+    ld hl, vBlankWaiter
+    inc [hl]
+    jr nz, .Return
+
+    call oamDmaFunction
+
+.Return:
     pop hl
     pop de
     pop bc
@@ -126,7 +132,7 @@ VideoOBJPaletteWrite::
     inc de
     jr VideoBGPaletteWrite.Loop
 
-DMAFunction:
+OamDmaFunction:
     ld a, >oamBuf
     ldh [GB_DMA], a
     ld a, GB_MMAP_OAM_SIZE

@@ -334,6 +334,30 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
                             ))?;
                         }
                     }
+                    // validate the rst
+                    if (reloc.flags & RelocFlags::RST) != 0 {
+                        let value = match value {
+                            0x00 => 0xC7,
+                            0x08 => 0xCF,
+                            0x10 => 0xD7,
+                            0x18 => 0xDF,
+                            0x20 => 0xE7,
+                            0x28 => 0xEF,
+                            0x30 => 0xF7,
+                            0x38 => 0xFF,
+                            _ => Err(ld.err_in(
+                                reloc.unit,
+                                &format!(
+                                    "expression not rst\n\tdefined at {}:{}:{}",
+                                    reloc.pos.file.display(),
+                                    reloc.pos.line,
+                                    reloc.pos.col
+                                ),
+                            ))?,
+                        };
+                        ld.sections[i].data[reloc.offset] = value as u8;
+                        continue;
+                    }
                     ld.sections[i].data[reloc.offset] = value as u8;
                 }
                 2 => {

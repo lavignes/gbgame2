@@ -8,15 +8,6 @@ stackBase:
 
 \section "HOME"
 
-\struct TESTING
-    .hello 1
-\end
-
-Hello:
-    \create TESTING
-
-FOO=Hello.hello
-
 Start::
     di
     ld sp, stackBase

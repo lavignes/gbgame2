@@ -2089,20 +2089,25 @@ impl<'a> Asm<'a> {
             },
 
             Mne::RST => {
+                let pos = self.tok().pos();
                 let expr = self.expr()?;
                 if self.emit {
-                    let expr = self.const_expr(expr)?;
-                    self.write(&[match expr {
-                        0x00 => 0xC7,
-                        0x08 => 0xCF,
-                        0x10 => 0xD7,
-                        0x18 => 0xDF,
-                        0x20 => 0xE7,
-                        0x28 => 0xEF,
-                        0x30 => 0xF7,
-                        0x38 => 0xFF,
-                        _ => return Err(self.err("invalid rst address")),
-                    }]);
+                    if let Ok(expr) = self.const_expr(expr) {
+                        self.write(&[match expr {
+                            0x00 => 0xC7,
+                            0x08 => 0xCF,
+                            0x10 => 0xD7,
+                            0x18 => 0xDF,
+                            0x20 => 0xE7,
+                            0x28 => 0xEF,
+                            0x30 => 0xF7,
+                            0x38 => 0xFF,
+                            _ => return Err(self.err("invalid rst address")),
+                        }]);
+                    } else {
+                        self.write(&[0xFD]);
+                        self.reloc(0, 1, expr, pos, RelocFlags::RST);
+                    }
                 }
                 return self.add_pc(1);
             }

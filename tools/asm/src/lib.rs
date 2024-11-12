@@ -78,7 +78,8 @@ pub struct RelocFlags;
 
 impl RelocFlags {
     pub const HI: u8 = 1 << 0;
-    pub const JP: u8 = 1 << 1;
+    pub const RST: u8 = 1 << 1;
+    pub const JP: u8 = 1 << 2;
 }
 
 #[derive(Debug, Clone, Copy)]
