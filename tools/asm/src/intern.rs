@@ -50,6 +50,13 @@ where
     pub fn intern(&mut self, values: &[T]) -> &'a [T] {
         let mut has_space = None;
         for (i, storage) in self.storages.iter().enumerate() {
+            // we can always fit an empty slice
+            if values.is_empty() {
+                // SAFETY: the assumption is that we never re-allocate storages
+                unsafe {
+                    return slice::from_raw_parts(storage.as_ptr(), 0);
+                }
+            }
             // pre-check if we have space for the items in case we have a cache miss
             if has_space.is_none() && ((storage.capacity() - storage.len()) >= values.len()) {
                 has_space = Some(i);

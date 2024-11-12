@@ -42,9 +42,9 @@ HRAM = { start = "$FF80", size = "$7E", type = "rw" }
 #########################################
 ## ROM
 #########################################
-VECTORS = { load = "VECTORS", type = "ro", tags = { bank = "$0" } }
+VECTORS = { load = "VECTORS", type = "ro", tags = { bank = "$00" } }
 HEADER = { load = "HEADER", type = "ro" }
-HOME = { load = "ROM00", type = "ro", tags = { bank = "$0" } }
+HOME = { load = "ROM00", type = "ro", tags = { bank = "$00" } }
 
 #########################################
 ## VRAM

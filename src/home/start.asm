@@ -8,6 +8,15 @@ stackBase:
 
 \section "HOME"
 
+\struct TESTING
+    .hello 1
+\end
+
+Hello:
+    \create TESTING
+
+FOO=Hello.hello
+
 Start::
     di
     ld sp, stackBase
@@ -20,7 +29,9 @@ Start::
 
     ld a, 1
     ldh [romBank], a
-    ld [GB_MBC5_BANK_LO], a
+    ld [GB_MBC5_ROMX_BANK_LO], a
+    xor a, a
+    ld [GB_MBC5_ROMX_BANK_HI], a
 
     ld hl, GB_MMAP_WRAM0_START
     ld bc, GB_MMAP_WRAM0_SIZE

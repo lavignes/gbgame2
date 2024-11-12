@@ -48,10 +48,10 @@ RstPanic::
 PAD_TO $40
 IntVBlank:
     push af
-    ld a, 1
-    ldh [vBlanked], a
-    pop af
-    reti
+    push bc
+    push de
+    push hl
+    jp VideoBlank
 
 PAD_TO $48
 IntLcd:

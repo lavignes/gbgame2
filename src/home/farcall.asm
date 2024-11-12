@@ -23,11 +23,11 @@ FarCallHL::
     push af ; push return bank
     ld a, e
     ldh [romBank], a
-    ld [GB_MBC5_BANK_LO], a
+    ld [GB_MBC5_ROMX_BANK_LO], a
     jp hl ; TODO dont we need to rst RstCall?
     ; restore bank and return
     pop af
     ld [romBank], a
-    ld [GB_MBC5_BANK_LO], a
+    ld [GB_MBC5_ROMX_BANK_LO], a
     ret
 

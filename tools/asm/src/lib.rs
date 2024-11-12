@@ -168,16 +168,18 @@ impl Tok {
     pub const MACRO: Self = Self('\u{1000D9}');
     pub const LOOP: Self = Self('\u{1000DA}');
     pub const FAIL: Self = Self('\u{1000DB}');
-    pub const STRUCT: Self = Self('\u{1000DC}');
-    pub const TAG: Self = Self('\u{1000DD}');
-    pub const LEN: Self = Self('\u{1000DE}');
+    pub const WARN: Self = Self('\u{1000DC}');
+    pub const STRUCT: Self = Self('\u{1000DD}');
+    pub const CREATE: Self = Self('\u{1000DE}');
+    pub const TAG: Self = Self('\u{1000DF}');
+    pub const LEN: Self = Self('\u{1000E0}');
 
-    pub const ARG: Self = Self('\u{1000E0}');
-    pub const NARG: Self = Self('\u{1000E1}');
-    pub const SHIFT: Self = Self('\u{1000E2}');
-    pub const UNIQ: Self = Self('\u{1000E3}');
-    pub const JOIN: Self = Self('\u{1000E4}');
-    pub const BREAK: Self = Self('\u{1000E5}');
+    pub const ARG: Self = Self('\u{1000F0}');
+    pub const NARG: Self = Self('\u{1000F1}');
+    pub const SHIFT: Self = Self('\u{1000F2}');
+    pub const UNIQ: Self = Self('\u{1000F3}');
+    pub const JOIN: Self = Self('\u{1000F4}');
+    pub const BREAK: Self = Self('\u{1000F5}');
 
     pub const ASL: Self = Self('\u{100090}'); // <<
     pub const ASR: Self = Self('\u{100091}'); // >>
@@ -228,9 +230,12 @@ impl Display for Tok {
             Tok::MACRO => write!(f, "`\\MACRO`")?,
             Tok::LOOP => write!(f, "`\\LOOP`")?,
             Tok::FAIL => write!(f, "`\\FAIL`")?,
+            Tok::WARN => write!(f, "`\\WARN`")?,
             Tok::STRUCT => write!(f, "`\\STRUCT`")?,
+            Tok::CREATE => write!(f, "`\\CREATE`")?,
             Tok::TAG => write!(f, "`\\TAG`")?,
             Tok::LEN => write!(f, "`\\LEN`")?,
+
             Tok::ARG => write!(f, "macro argument")?,
             Tok::NARG => write!(f, "`\\NARG`")?,
             Tok::SHIFT => write!(f, "`\\SHIFT`")?,

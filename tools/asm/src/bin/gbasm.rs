@@ -271,9 +271,11 @@ struct Asm<'a> {
     tok_int: SliceInt<(Pos<'a>, MacroTok<'a>)>,
     loop_int: SliceInt<(Pos<'a>, LoopTok<'a>)>,
     expr_int: SliceInt<ExprNode<'a>>,
+    struct_int: SliceInt<&'a str>,
     section: usize,
     sections: Vec<Section<'a>>,
     syms: HashMap<Label<'a>, Sym<'a>>,
+    structs: HashMap<&'a str, &'a [&'a str]>,
     scope: Option<&'a str>,
     emit: bool,
     if_level: usize,
@@ -302,9 +304,11 @@ impl<'a> Asm<'a> {
             path_int,
             loop_int: SliceInt::new(),
             expr_int: SliceInt::new(),
+            struct_int: SliceInt::new(),
             section: 0,
             sections: vec![Section::new(code)],
             syms: HashMap::new(),
+            structs: HashMap::new(),
             scope: None,
             emit: false,
             if_level: 0,
@@ -2280,6 +2284,9 @@ impl<'a> Asm<'a> {
             Tok::STRUCT => {
                 self.structdef()?;
             }
+            Tok::CREATE => {
+                self.create()?;
+            }
             Tok::FAIL => {
                 self.eat();
                 if self.peek()? != Tok::STR {
@@ -2287,6 +2294,7 @@ impl<'a> Asm<'a> {
                 }
                 return Err(self.err(self.str()));
             }
+            Tok::WARN => todo!(),
             _ => return Err(self.err("expected directive")),
         }
         Ok(())
@@ -2384,6 +2392,7 @@ impl<'a> Asm<'a> {
         let mut size = 0;
         let unit = self.str_int.intern("__STATIC__");
         let section = self.sections[self.section].name;
+        let mut fields = vec![];
         loop {
             match self.peek()? {
                 Tok::NEWLINE => {
@@ -2422,6 +2431,7 @@ impl<'a> Asm<'a> {
                 let expr = self.expr()?;
                 let expr = self.const_expr(expr)?;
                 if !self.emit {
+                    fields.push(field);
                     self.syms.insert(
                         label,
                         Sym {
@@ -2438,6 +2448,8 @@ impl<'a> Asm<'a> {
             self.eol()?;
         }
         if !self.emit {
+            let fields = self.struct_int.intern(&fields);
+            self.structs.insert(&string, fields);
             self.syms.insert(
                 label,
                 Sym {
@@ -2449,6 +2461,54 @@ impl<'a> Asm<'a> {
                 },
             );
         }
+        Ok(())
+    }
+
+    fn create(&mut self) -> io::Result<()> {
+        if self.scope.is_none() {
+            return Err(self.err("\\CREATE must be within a global label"));
+        }
+        self.eat();
+        if self.peek()? != Tok::ID {
+            return Err(self.err("expected struct name"));
+        }
+        let string = self.str_intern();
+        let pos = self.tok().pos();
+        let unit = self.str_int.intern("__STATIC__");
+        let section = self.sections[self.section].name;
+        match self.structs.get(string) {
+            None => return Err(self.err("struct does not exist")),
+            Some(&fields) => {
+                for field in fields {
+                    let sym = self.syms.get(&Label::new(Some(string), &field)).unwrap();
+                    let offset = self.const_expr(sym.value)?;
+                    self.syms.insert(
+                        Label::new(self.scope, &field),
+                        Sym {
+                            value: Expr::Const((self.pc() as i32).wrapping_add(offset)),
+                            unit,
+                            section,
+                            pos,
+                            flags: SymFlags::EQU,
+                        },
+                    );
+                }
+                // TODO check for redefinition / multiple \struct under one label
+                let size = self.str_int.intern(".SIZE");
+                let sym = self.syms.get(&Label::new(Some(string), size)).unwrap();
+                self.syms.insert(
+                    Label::new(self.scope, size),
+                    Sym {
+                        value: sym.value,
+                        unit,
+                        section,
+                        pos,
+                        flags: SymFlags::EQU,
+                    },
+                );
+            }
+        }
+        self.eat();
         Ok(())
     }
 
@@ -3188,7 +3248,9 @@ const DIRECTIVES: &[(&'static str, Tok)] = &[
     ("MACRO", Tok::MACRO),
     ("LOOP", Tok::LOOP),
     ("FAIL", Tok::FAIL),
+    ("WARN", Tok::WARN),
     ("STRUCT", Tok::STRUCT),
+    ("CREATE", Tok::CREATE),
     ("TAG", Tok::TAG),
     ("LEN", Tok::LEN),
     ("NARG", Tok::NARG),

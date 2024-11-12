@@ -55,6 +55,13 @@ VideoInit::
     ldh [GB_LCDC], a
     ret
 
+VideoBlank::
+    pop hl
+    pop de
+    pop bc
+    pop af
+    reti
+
 ; NOTE only call after disabling PPU interrupts
 ;
 ; TODO should I therefore automatically disable interrupts?
