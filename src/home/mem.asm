@@ -2,16 +2,21 @@
 
 \section "HOME"
 
-;; Copy `BC` bytes from `DE` to `HL`
+;; Copy `BC` bytes from `HL` to `DE`
 MemCopy::
-    ld a, c
-    or a, b
-    ret z
-    ld a, [de]
-    ldi [hl], a
+    inc b
+    inc c
+    jr .Decrement
+.CopyByte:
+    ldi a, [hl]
+    ld [de], a
     inc de
-    dec bc
-    jr MemCopy
+.Decrement:
+    dec c
+    jr nz, .CopyByte
+    dec b
+    jr nz, .CopyByte
+    ret
 
 ;; Set `BC` bytes to `$00` starting at `HL`
 MemZero::
@@ -20,12 +25,15 @@ MemZero::
 
 ;; Set `BC` bytes to `A` starting at `HL`
 MemSet::
-    ld e, a
-    ld a, c
-    or a, b
-    ret z
-    ld a, e
+    inc b
+    inc c
+    jr .Decrement
+.SetByte:
     ldi [hl], a
-    dec bc
-    jr MemSet
+.Decrement:
+    dec c
+    jr nz, .SetByte
+    dec b
+    jr nz, .SetByte
+    ret
 

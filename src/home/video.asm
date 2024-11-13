@@ -11,13 +11,18 @@ oamBuf: \space GB_MMAP_OAM_SIZE
 ;; Holds the OAM DMA transfer routine
 oamDmaFunction: \space 10
 
-vBlankWaiter:: \space 1
+vBlanked:: \space 1
+
+screenY: \space 1
+screenX: \space 1
+windowY: \space 1
+windowX: \space 1
 
 \section "HOME"
 
 VideoInit::
-    ld hl, oamDmaFunction
-    ld de, OamDmaFunction
+    ld hl, OamDmaFunction
+    ld de, oamDmaFunction
     ld bc, OamDmaFunction.End - OamDmaFunction
     call MemCopy
     \loop BANK, 2
@@ -55,22 +60,34 @@ VideoInit::
     ret
 
 VideoBlank::
-    ld hl, vBlankWaiter
-    inc [hl]
-    jr nz, .Return
+    ldh a, [screenY]
+    ldh [GB_SCY], a
+    ldh a, [screenX]
+    ldh [GB_SCX], a
+    ldh a, [windowY]
+    ldh [GB_WY], a
+    ldh a, [windowX]
+    ldh [GB_WX], a
+
+    ; TODO: update one of:
+    ; - tiles
+    ; - palettes
+    ; - execute pending VRAM HDMA transfers
+    ; - ??? 
 
     call oamDmaFunction
 
-.Return:
+    ld a, 1
+    ldh [vBlanked], a
+
+    call JoyUpdate
+
     pop hl
     pop de
     pop bc
     pop af
     reti
 
-; NOTE only call after disabling PPU interrupts
-;
-; TODO should I therefore automatically disable interrupts?
 VideoDisable::
     ; Already disabled?
     ld hl, GB_LCDC
