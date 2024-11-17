@@ -127,4 +127,5 @@ GB_IE_BIT_TIMER  = 2
 GB_IE_BIT_SERIAL = 3
 GB_IE_BIT_JOYPAD = 4
 
-\end ; GB_INC
+\end
+

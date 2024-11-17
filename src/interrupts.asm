@@ -1,6 +1,6 @@
 ; vim: ft=gbasm
 
-\section "VECTORS"
+\section "INTERRUPTS"
 
 ; Naive padding macro. The best way to really ensure this
 ; is to place each interrupt in a different section via the

@@ -11,7 +11,7 @@ oamBuf: \space GB_MMAP_OAM_SIZE
 ;; Holds the OAM DMA transfer routine
 oamDmaFunction: \space 10
 
-vBlanked:: \space 1
+vBlanked: \space 1
 
 screenY: \space 1
 screenX: \space 1
@@ -73,7 +73,7 @@ VideoBlank::
     ; - tiles
     ; - palettes
     ; - execute pending VRAM HDMA transfers
-    ; - ??? 
+    ; - ???
 
     call oamDmaFunction
 

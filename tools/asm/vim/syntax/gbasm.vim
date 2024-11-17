@@ -2,8 +2,8 @@ syn clear
 syn case ignore
 
 syn match gbasmIdentifier "[a-z_\.][a-z0-9_\.]*"
-syn match gbasmGlobalLabel "^[a-z_][a-z0-9_\.]*"
-syn match gbasmLocalLabel "^\.[a-z_][a-z0-9_]*"
+syn match gbasmGlobalLabel "[a-z_][a-z0-9_\.]*::\?"
+syn match gbasmLocalLabel "\.[a-z_][a-z0-9_]*::\?"
 
 syn keyword gbasmRegister a b c d e h l af bc de hl sp
 syn keyword gbasmConditions z c nc nz
