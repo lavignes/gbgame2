@@ -3,7 +3,7 @@ use std::{
     error::Error,
     fmt::Write as FmtWrite,
     fs::{self, File},
-    io::{self, ErrorKind, Read, Seek, Write},
+    io::{self, BufReader, BufWriter, ErrorKind, Read, Seek, Write},
     path::{Path, PathBuf},
     process::ExitCode,
     str,
@@ -95,15 +95,15 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
     asm.pass()?;
 
     let mut output: Box<dyn Write> = match args.output {
-        Some(path) => Box::new(
+        Some(path) => Box::new(BufWriter::new(
             File::options()
                 .write(true)
                 .create(true)
                 .truncate(true)
                 .open(&path)
                 .map_err(|e| format!("cant open file: {}: {e}", path.display()))?,
-        ),
-        None => Box::new(io::stdout()),
+        )),
+        None => Box::new(BufWriter::new(io::stdout())),
     };
 
     tracing::trace!("writing");
@@ -3303,7 +3303,7 @@ trait TokStream<'a> {
 }
 
 struct Lexer<'a, R> {
-    reader: CharReader<R>,
+    reader: CharReader<BufReader<R>>,
     string: String,
     number: i32,
     stash: Option<Tok>,
@@ -3313,7 +3313,7 @@ struct Lexer<'a, R> {
 impl<'a, R: Read + Seek> Lexer<'a, R> {
     fn new(reader: R, file: &'a Path) -> Self {
         Self {
-            reader: CharReader::new(reader),
+            reader: CharReader::new(BufReader::new(reader)),
             string: String::new(),
             number: 0,
             stash: None,

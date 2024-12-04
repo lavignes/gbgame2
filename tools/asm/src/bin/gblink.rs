@@ -7,7 +7,7 @@ use std::{
     error::Error,
     ffi::OsStr,
     fs::{self, File},
-    io::{self, BufWriter, ErrorKind, Read, Write},
+    io::{self, BufReader, BufWriter, ErrorKind, Read, Write},
     mem,
     path::{Path, PathBuf},
     process::ExitCode,
@@ -143,7 +143,7 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
     for object in args.objects {
         let path = fs::canonicalize(object)?;
         let path = path.to_str().unwrap();
-        let file = File::open(path)?;
+        let file = BufReader::new(File::open(path)?);
         ld.load(path, file)?;
     }
 
@@ -393,7 +393,7 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
                 .open(&path)
                 .map_err(|e| format!("cant open file: {}: {e}", path.display()))?,
         )),
-        None => Box::new(io::stdout()),
+        None => Box::new(BufWriter::new(io::stdout())),
     };
 
     tracing::trace!("writing");
@@ -426,12 +426,14 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
 
     if let Some(path) = args.debug {
         tracing::trace!("writing debug symbols");
-        let mut file = File::options()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(&path)
-            .map_err(|e| format!("cant open file: {}: {e}", path.display()))?;
+        let mut file = BufWriter::new(
+            File::options()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .open(&path)
+                .map_err(|e| format!("cant open file: {}: {e}", path.display()))?,
+        );
         for (label, sym) in &ld.syms {
             if (sym.flags & SymFlags::EQU) != 0 {
                 continue;
@@ -451,12 +453,14 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
 
     if let Some(path) = args.tags {
         tracing::trace!("writing tags file");
-        let mut file = File::options()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(&path)
-            .map_err(|e| format!("cant open file: {}: {e}", path.display()))?;
+        let mut file = BufWriter::new(
+            File::options()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .open(&path)
+                .map_err(|e| format!("cant open file: {}: {e}", path.display()))?,
+        );
         for (label, sym) in &ld.syms {
             if sym.pos.file == Path::new("__DEFINES__") {
                 continue;
