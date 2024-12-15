@@ -446,7 +446,7 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
                         continue;
                     }
                 }
-                writeln!(file, "{value:04X} {}", label)?;
+                writeln!(file, "00:{value:04X} {}", label)?;
             }
         }
     }

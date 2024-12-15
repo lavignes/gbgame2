@@ -58,8 +58,8 @@ hi def link gbasmNumber       Number
 hi def link gbasmString	      String
 hi def link gbasmChar         Character
 hi def link gbasmIdentifier   Identifier
-hi def link gbasmRegister     Identifier
-hi def link gbasmConditions   Identifier
+hi def link gbasmRegister     SpecialChar
+hi def link gbasmConditions   SpecialChar
 hi def link gbasmOpcode       Keyword
 hi def link gbasmEscape       SpecialChar
 hi def link gbasmDirective    PreProc
